@@ -15,6 +15,8 @@ mod update;
 mod wake;
 mod windows;
 
+use std::time::Duration;
+
 use smithay_client_toolkit::reexports::protocols::wp::{
     fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
     viewporter::client::wp_viewporter::WpViewporter,
@@ -53,6 +55,8 @@ struct WaylandState {
     per_monitor: Vec<fn(&Monitor) -> LayerWindow>,
 
     scale_factor: ScaleFactor,
+
+    animation_frame_interval: Option<Duration>,
 
     // keys do not say which window they are for, so the window that has focus is kept
     keyboard_focus: Option<WlSurface>,
@@ -111,6 +115,7 @@ impl WaylandApp {
         lock_view: Option<fn(&Monitor) -> LayerWindow>,
         handlers: Option<IpcHandlers>,
         scale_factor: ScaleFactor,
+        animation_frame_interval: Option<Duration>,
     ) -> Self {
         let connection = connect();
 
@@ -140,6 +145,8 @@ impl WaylandApp {
             per_monitor,
 
             scale_factor,
+
+            animation_frame_interval,
 
             keyboard_focus: None,
 

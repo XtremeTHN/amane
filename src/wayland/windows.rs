@@ -79,6 +79,9 @@ impl WaylandState {
             scale_factor: self.scale_factor,
 
             frame_requested: false,
+            redraw_requested: false,
+            animation_frame_interval: self.animation_frame_interval,
+            last_animation_frame: None,
             last_frame: None,
             reads: HashSet::new(),
 

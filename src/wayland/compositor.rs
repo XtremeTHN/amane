@@ -43,6 +43,10 @@ impl CompositorHandler for WaylandState {
 
         window.frame_requested = false;
 
+        if window.defer_animation_frame() {
+            return;
+        }
+
         window.redraw();
     }
 

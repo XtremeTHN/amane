@@ -6,11 +6,13 @@ use crate::scale::ScaleFactor;
 use crate::wayland::WaylandApp;
 use crate::window::NamedWindow;
 use crate::{LayerWindow, Monitor, Window};
+use std::{num::NonZeroU32, time::Duration};
 
 #[derive(Default)]
 pub struct App {
     font: Option<String>,
     scale_factor: ScaleFactor,
+    animation_fps_limit: Option<NonZeroU32>,
 
     windows: Vec<fn() -> LayerWindow>,
     normal_windows: Vec<NamedWindow>,
@@ -37,6 +39,15 @@ impl App {
     /// The default is `1.0`. Panics if the factor is not positive and finite.
     pub fn scale_factor(mut self, factor: f32) -> Self {
         self.scale_factor = ScaleFactor::new(factor);
+
+        self
+    }
+
+    /// Limits animation-driven redraws. Other requested redraws remain immediate.
+    /// The default is uncapped. Panics if the limit is zero.
+    pub fn animation_fps_limit(mut self, fps: u32) -> Self {
+        self.animation_fps_limit =
+            Some(NonZeroU32::new(fps).expect("animation FPS limit must be greater than zero"));
 
         self
     }
@@ -114,6 +125,8 @@ impl App {
                 Some(self.handlers)
             },
             self.scale_factor,
+            self.animation_fps_limit
+                .map(|fps| Duration::from_secs_f64(1.0 / f64::from(fps.get()))),
         );
 
         backend.run();
@@ -123,6 +136,11 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_zero_animation_fps_limit() {
+        assert!(std::panic::catch_unwind(|| App::new().animation_fps_limit(0)).is_err());
+    }
 
     #[test]
     fn rejects_invalid_scale_factors_before_connecting() {

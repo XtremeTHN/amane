@@ -11,6 +11,7 @@ use super::surface::OpenWindow;
 impl OpenWindow {
     // one frame: run the view, send its settings, draw it and show it
     pub fn redraw(&mut self) {
+        self.redraw_requested = false;
         let started = Instant::now();
 
         let (content, reads) = frame::run_view(
@@ -65,7 +66,10 @@ impl OpenWindow {
          * a hidden window never gets here so it waits until it shows again
          */
         if frame.moving {
+            self.last_animation_frame = Some(Instant::now());
             self.ask_for_frame();
+        } else {
+            self.last_animation_frame = None;
         }
 
         let drawn = Instant::now();
@@ -89,7 +93,30 @@ impl OpenWindow {
         }
     }
 
+    pub fn defer_animation_frame(&mut self) -> bool {
+        if self.redraw_requested || self.width == 0 {
+            return false;
+        }
+
+        let (Some(interval), Some(last_frame)) =
+            (self.animation_frame_interval, self.last_animation_frame)
+        else {
+            return false;
+        };
+
+        if last_frame.elapsed() >= interval {
+            return false;
+        }
+
+        // Keep the compositor callback chain alive, but do not rebuild or draw yet.
+        self.ask_for_frame();
+        self.role.commit();
+        true
+    }
+
     pub fn request_frame(&mut self) {
+        self.redraw_requested = true;
+
         /*
          * a hidden or unconfigured window gets no frame callbacks,
          * so the view runs right away to see if the window should show

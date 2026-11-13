@@ -1,6 +1,6 @@
 use std::any::TypeId;
 use std::collections::HashSet;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::{
     session_lock::SessionLockSurface,
@@ -40,6 +40,13 @@ pub struct OpenWindow {
     pub scale_factor: ScaleFactor,
 
     pub frame_requested: bool,
+
+    // a non-animation request arrived while a frame callback was already pending
+    pub redraw_requested: bool,
+
+    pub animation_frame_interval: Option<Duration>,
+
+    pub last_animation_frame: Option<Instant>,
 
     // when the last frame started drawing, for AMANE_FRAMES
     pub last_frame: Option<Instant>,
