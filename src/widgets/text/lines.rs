@@ -12,13 +12,10 @@ pub struct Rules {
 }
 
 pub fn measure(content: &str, font: FontRef<'static>, size: f32) -> f32 {
-    let mut total = 0.0;
-
-    for letter in content.chars() {
-        total += font::measure_letter(font, letter, size).advance;
-    }
-
-    total
+    font::shape(content, font, size)
+        .iter()
+        .map(|glyph| glyph.advance)
+        .sum()
 }
 
 // the height of one line, from the top of the tallest letter to the bottom of the lowest
@@ -47,7 +44,13 @@ pub fn stack_height(font: FontRef<'static>, size: f32, count: usize) -> f32 {
     above_last + height(font, size)
 }
 
-pub fn arrange(content: &str, font: FontRef<'static>, size: f32, width: f32, rules: Rules) -> Vec<String> {
+pub fn arrange(
+    content: &str,
+    font: FontRef<'static>,
+    size: f32,
+    width: f32,
+    rules: Rules,
+) -> Vec<String> {
     let mut lines = match rules.wrap {
         true => wrap(content, font, size, width),
         false => vec![String::from(content)],
@@ -126,26 +129,24 @@ fn elide(line: &str, font: FontRef<'static>, size: f32, width: f32) -> String {
 
 // where the letters' ink starts and ends, counted from the pen's starting point
 pub fn ink(content: &str, font: FontRef<'static>, size: f32) -> (f32, f32) {
-    let mut pen = 0.0;
-
     let mut left = f32::MAX;
     let mut right = f32::MIN;
 
-    for letter in content.chars() {
-        let measured = font::measure_letter(font, letter, size);
+    let glyphs = font::shape(content, font, size);
 
-        // a space has no ink, only an advance
-        if let Some(bounds) = bounds(measured.font, measured.id) {
-            left = left.min(pen + bounds.min.x * measured.units);
-            right = right.max(pen + bounds.max.x * measured.units);
+    for glyph in &glyphs {
+        if let Some(bounds) = bounds(glyph.font, glyph.id) {
+            let units_per_em = glyph.font.metrics(font::coords(glyph.font)).units_per_em;
+            let units = size / f32::from(units_per_em);
+
+            left = left.min(glyph.x + bounds.min.x * units);
+            right = right.max(glyph.x + bounds.max.x * units);
         }
-
-        pen += measured.advance;
     }
 
     // nothing but spaces is as wide as its advance
     if left > right {
-        return (0.0, pen);
+        return (0.0, measure(content, font, size));
     }
 
     (left, right)

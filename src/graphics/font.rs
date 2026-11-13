@@ -5,6 +5,9 @@ use std::sync::{LazyLock, Mutex, PoisonError};
 use fontconfig::{CharSet, Fontconfig, Pattern, UnicodeCoverage};
 use swash::FontRef;
 use swash::scale::ScaleContext;
+use swash::shape::cluster::Glyph;
+use swash::shape::{Direction, ShapeContext};
+use swash::text::{BidiClass, Codepoint, Script};
 
 use crate::Weight;
 
@@ -31,6 +34,7 @@ static FALLBACKS: LazyLock<Mutex<HashMap<FallbackKey, Option<FontRef<'static>>>>
 thread_local! {
     // swash keeps its working memory here, so each letter doesn't allocate it again
     static CONTEXT: RefCell<ScaleContext> = RefCell::new(ScaleContext::new());
+    static SHAPE_CONTEXT: RefCell<ShapeContext> = RefCell::new(ShapeContext::new());
 }
 
 pub fn set_default(family: &str) {
@@ -149,38 +153,109 @@ pub fn with_letter(font: FontRef<'static>, letter: char) -> (FontRef<'static>, u
     (fallback, id)
 }
 
-// swash's working memory for turning letters into outlines and pixels
-pub fn with_context<T>(work: impl FnOnce(&mut ScaleContext) -> T) -> T {
-    CONTEXT.with_borrow_mut(work)
-}
-
-// one letter at a text size: the font that has it, its glyph, and how it measures in pixels
-pub struct MeasuredLetter {
+pub struct ShapedGlyph {
     pub font: FontRef<'static>,
     pub id: u16,
-
-    // font units to pixels; a fallback font can measure in other units than the text's own
-    pub units: f32,
-
-    // how far the letter moves the pen
+    pub x: f32,
+    pub y: f32,
     pub advance: f32,
 }
 
-pub fn measure_letter(font: FontRef<'static>, letter: char, size: f32) -> MeasuredLetter {
-    let (font, id) = with_letter(font, letter);
-
-    let units_per_em = font.metrics(coords(font)).units_per_em;
-
-    let units = size / f32::from(units_per_em);
-
-    let advance = font.glyph_metrics(coords(font)).advance_width(id);
-
-    MeasuredLetter {
-        font,
-        id,
-        units,
-        advance: advance * units,
+pub fn shape(content: &str, font: FontRef<'static>, size: f32) -> Vec<ShapedGlyph> {
+    struct Run {
+        font: FontRef<'static>,
+        script: Script,
+        content: String,
     }
+
+    let chars: Vec<char> = content.chars().collect();
+    let mut scripts: Vec<Script> = chars.iter().map(|ch| ch.script()).collect();
+
+    for i in 0..scripts.len() {
+        if matches!(scripts[i], Script::Common | Script::Inherited) {
+            scripts[i] = scripts[..i]
+                .iter()
+                .rev()
+                .find(|script| !matches!(script, Script::Common | Script::Inherited))
+                .or_else(|| {
+                    scripts[i + 1..]
+                        .iter()
+                        .find(|script| !matches!(script, Script::Common | Script::Inherited))
+                })
+                .copied()
+                .unwrap_or(Script::Latin);
+        }
+    }
+
+    let mut runs: Vec<Run> = Vec::new();
+
+    for (letter, script) in chars.into_iter().zip(scripts) {
+        let run_font = with_letter(font, letter).0;
+
+        if let Some(run) = runs.last_mut()
+            && run.font.key.value() == run_font.key.value()
+            && run.script == script
+        {
+            run.content.push(letter);
+        } else {
+            runs.push(Run {
+                font: run_font,
+                script,
+                content: String::from(letter),
+            });
+        }
+    }
+
+    let mut glyphs = Vec::new();
+    let mut run_x = 0.0;
+
+    for run in runs {
+        let direction = run
+            .content
+            .chars()
+            .find_map(|ch| match ch.bidi_class() {
+                BidiClass::AL | BidiClass::R => Some(Direction::RightToLeft),
+                BidiClass::L => Some(Direction::LeftToRight),
+                _ => None,
+            })
+            .unwrap_or(Direction::LeftToRight);
+
+        SHAPE_CONTEXT.with_borrow_mut(|context| {
+            let mut shaper = context
+                .builder(run.font)
+                .normalized_coords(coords(run.font))
+                .script(run.script)
+                .direction(direction)
+                .size(size)
+                .features([("liga", 1), ("rlig", 1)])
+                .build();
+
+            shaper.add_str(&run.content);
+            shaper.shape_with(|cluster| {
+                for glyph in cluster.glyphs {
+                    glyphs.push(shaped_glyph(run.font, glyph, run_x));
+                    run_x += glyph.advance;
+                }
+            });
+        });
+    }
+
+    glyphs
+}
+
+fn shaped_glyph(font: FontRef<'static>, glyph: &Glyph, run_x: f32) -> ShapedGlyph {
+    ShapedGlyph {
+        font,
+        id: glyph.id,
+        x: run_x + glyph.x,
+        y: glyph.y,
+        advance: glyph.advance,
+    }
+}
+
+// swash's working memory for turning letters into outlines and pixels
+pub fn with_context<T>(work: impl FnOnce(&mut ScaleContext) -> T) -> T {
+    CONTEXT.with_borrow_mut(work)
 }
 
 fn fallback(letter: char, weight: u16) -> Option<FontRef<'static>> {
@@ -298,4 +373,23 @@ fn load_file(path: &str, index: u32) -> FontRef<'static> {
     loaded.insert(key, font);
 
     font
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shapes_material_symbols_ligatures() {
+        let Some(fontconfig) = Fontconfig::new() else {
+            return;
+        };
+
+        if fontconfig.find("Material Symbols Rounded", None).is_err() {
+            return;
+        }
+
+        let font = load_weighted(Some("Material Symbols Rounded"), Weight::Regular);
+        assert_eq!(shape("settings", font, 16.0).len(), 1);
+    }
 }

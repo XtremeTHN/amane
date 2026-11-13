@@ -178,13 +178,14 @@ fn parse(workspaces: &str, monitors: &str) -> Option<Vec<Workspace>> {
     let mut list = Vec::new();
 
     for workspace in workspaces.as_array()? {
-        let id = workspace["id"].as_i64()?;
         let name = workspace["name"].as_str()?;
 
         // special workspaces, like the scratchpad, have no place in a bar
         if name == "special" || name.starts_with("special:") {
             continue;
         }
+
+        let id = workspace["id"].as_i64()?;
 
         // unnamed workspaces are named after their id
         let named = name != id.to_string();
@@ -228,7 +229,7 @@ mod tests {
             {"id":2,"name":"web","monitor":"HDMI-A-1","windows":0},
             {"id":4,"name":"4","monitor":"eDP-1","windows":1},
             {"id":-1337,"name":"chat","monitor":"eDP-1","windows":1},
-            {"id":-98,"name":"special:scratchpad","monitor":"eDP-1","windows":1}
+            {"type":"special","name":"special:scratchpad","monitor":"eDP-1","windows":1}
         ]"#;
 
         let monitors = r#"[

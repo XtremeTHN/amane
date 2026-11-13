@@ -8,7 +8,7 @@ use crate::graphics::{Area, BezierPath, Color, Outline, Renderer, Transform, fon
 use super::Command;
 
 thread_local! {
-    // each letter's outline, read from the font once; swash gives every font its own key
+    // each glyph's outline, read from the font once; swash gives every font its own key
     static OUTLINES: RefCell<HashMap<(u64, u16), Option<BezierPath>>> =
         RefCell::new(HashMap::new());
 }
@@ -51,22 +51,17 @@ impl Renderer {
         let line_x = start.0.round();
         let baseline = (start.1 + ascent).round();
 
-        let mut pen = 0.0;
-
-        for letter in content.chars() {
-            let measured = font::measure_letter(font, letter, pixel_size);
-
-            let letter_x = line_x + f32::round(pen);
-
-            pen += measured.advance;
+        for glyph in font::shape(content, font, pixel_size) {
+            let letter_x = (line_x + glyph.x).round();
+            let letter_y = baseline - glyph.y;
 
             self.commands.push(Command::Glyph {
-                font: measured.font,
-                id: measured.id,
+                font: glyph.font,
+                id: glyph.id,
                 size: pixel_size,
                 color,
                 x: letter_x,
-                y: baseline,
+                y: letter_y,
             });
         }
     }
@@ -83,25 +78,21 @@ impl Renderer {
 
         let baseline = area.y + ascent;
 
-        let mut pen_x = area.x;
-
-        for letter in content.chars() {
-            let measured = font::measure_letter(font, letter, size);
-
-            let letter_x = pen_x;
-
-            pen_x += measured.advance;
+        for glyph in font::shape(content, font, size) {
+            let letter_x = area.x + glyph.x;
+            let letter_baseline = baseline - glyph.y;
 
             // a space has no outline but still moves the pen
-            let Some(path) = outline(measured.font, measured.id) else {
+            let Some(path) = outline(glyph.font, glyph.id) else {
                 continue;
             };
 
-            let face_units = measured.units;
+            let units_per_em = glyph.font.metrics(font::coords(glyph.font)).units_per_em;
+            let face_units = size / f32::from(units_per_em);
 
             // fonts point y upward, the screen points it downward
             let letter_transform =
-                Transform::from_row(face_units, 0.0, 0.0, -face_units, letter_x, baseline);
+                Transform::from_row(face_units, 0.0, 0.0, -face_units, letter_x, letter_baseline);
             let transform = letter_transform.post_concat(self.transform);
 
             self.commands.push(Command::Fill {
