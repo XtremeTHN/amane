@@ -9,6 +9,8 @@ use crate::{Button, Cursor, Key, Point, Scroll};
  * still work once the widget tree they came from is dropped
  */
 pub type ClickHandler = Rc<dyn Fn(Button)>;
+pub type PressHandler = Rc<dyn Fn(Button)>;
+pub type ReleaseHandler = Rc<dyn Fn(Button)>;
 pub type HoverHandler = Rc<dyn Fn(bool)>;
 pub type ScrollHandler = Rc<dyn Fn(Scroll)>;
 pub type KeyHandler = Rc<dyn Fn(Key)>;
@@ -18,6 +20,8 @@ pub type DropHandler = Rc<dyn Fn(Vec<PathBuf>)>;
 #[derive(Clone, Default)]
 pub struct Handlers {
     pub click: Option<ClickHandler>,
+    pub press: Option<PressHandler>,
+    pub release: Option<ReleaseHandler>,
     pub hover: Option<HoverHandler>,
     pub scroll: Option<ScrollHandler>,
     pub drag: Option<PointHandler>,

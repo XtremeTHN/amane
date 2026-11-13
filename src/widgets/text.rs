@@ -113,6 +113,12 @@ impl Widget for Text {
     }
 
     fn height(&self) -> Size {
+        if self.tight && !self.rules.wrap && !self.rules.elide {
+            let (_, _, top, bottom) = lines::ink_bounds(&self.content, self.face(), self.size);
+
+            return Size::Fixed(bottom - top);
+        }
+
         /*
          * the width is only known when drawing,
          * so wrapped text without a line limit cannot know its height yet
@@ -129,11 +135,23 @@ impl Widget for Text {
     fn draw(&self, renderer: &mut Renderer, area: Area) {
         let font = self.face();
 
-        // the ink starts at the area's left edge, not the pen
+        // Tight text uses its ink bounds so glyphs like icons center by their visible shape.
         let area = if self.tight {
-            let (left, _) = lines::ink(&self.content, font, self.size);
+            let (left, _, top, _) = lines::ink_bounds(&self.content, font, self.size);
+            let vertical_offset = if !self.rules.wrap && !self.rules.elide {
+                let ascent = font.metrics(font::coords(font)).scale(self.size).ascent;
 
-            Area::new(area.x - left, area.y, area.width, area.height)
+                ascent + top
+            } else {
+                0.0
+            };
+
+            Area::new(
+                area.x - left,
+                area.y - vertical_offset,
+                area.width,
+                area.height,
+            )
         } else {
             area
         };

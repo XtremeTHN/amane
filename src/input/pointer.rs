@@ -136,29 +136,49 @@ impl Pointer {
 
     // click
 
-    pub fn press(&mut self) {
-        self.pressed = self.find_topmost(|target| target.handlers.click.is_some());
+    pub fn press(&mut self, button: Button) -> bool {
+        self.pressed = self.find_topmost(|target| {
+            target.handlers.click.is_some() || target.handlers.release.is_some()
+        });
+
+        let Some(index) = self.find_topmost(|target| target.handlers.press.is_some()) else {
+            return false;
+        };
+
+        let Some(handler) = &self.targets[index].handlers.press else {
+            return false;
+        };
+
+        handler(button);
+        true
     }
 
-    // a click only counts when the button is let go over the widget it was pressed on
+    // release belongs to the pressed target; clicks additionally require releasing over it
     pub fn release(&mut self, button: Button) -> bool {
         let Some(pressed) = self.pressed.take() else {
             return false;
         };
 
-        let released = self.find_topmost(|target| target.handlers.click.is_some());
-
-        if released != Some(pressed) {
-            return false;
-        }
-
-        let Some(click) = &self.targets[pressed].handlers.click else {
+        let Some(target) = self.targets.get(pressed) else {
             return false;
         };
 
-        click(button);
+        let mut handled = false;
 
-        true
+        if let Some(release) = &target.handlers.release {
+            release(button);
+            handled = true;
+        }
+
+        let released = self.find_topmost(|target| target.handlers.click.is_some());
+        if released == Some(pressed)
+            && let Some(click) = &target.handlers.click
+        {
+            click(button);
+            handled = true;
+        }
+
+        handled
     }
 
     // drag
@@ -229,5 +249,85 @@ impl Pointer {
         drop(files);
 
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::Cell, rc::Rc};
+
+    use crate::Button;
+    use crate::graphics::Area;
+    use crate::input::{Handlers, Target};
+
+    use super::Pointer;
+
+    #[test]
+    fn press_handler_runs_on_press_not_release() {
+        let presses = Rc::new(Cell::new(0));
+        let press_state = Rc::clone(&presses);
+        let target = Target::new(
+            Area::new(0.0, 0.0, 10.0, 10.0),
+            Handlers {
+                press: Some(Rc::new(move |_| press_state.set(press_state.get() + 1))),
+                ..Default::default()
+            },
+        );
+
+        let mut pointer = Pointer::default();
+        pointer.set_targets(vec![target]);
+        pointer.move_to(5.0, 5.0);
+
+        assert!(pointer.press(Button::Left));
+        assert_eq!(presses.get(), 1);
+        assert!(!pointer.release(Button::Left));
+        assert_eq!(presses.get(), 1);
+    }
+
+    #[test]
+    fn release_handler_runs_outside_target_without_counting_a_click() {
+        let released = Rc::new(Cell::new(None));
+        let clicked = Rc::new(Cell::new(false));
+        let release_state = Rc::clone(&released);
+        let click_state = Rc::clone(&clicked);
+        let target = Target::new(
+            Area::new(0.0, 0.0, 10.0, 10.0),
+            Handlers {
+                click: Some(Rc::new(move |_| click_state.set(true))),
+                release: Some(Rc::new(move |button| release_state.set(Some(button)))),
+                ..Default::default()
+            },
+        );
+
+        let mut pointer = Pointer::default();
+        pointer.set_targets(vec![target]);
+        pointer.move_to(5.0, 5.0);
+        pointer.press(Button::Left);
+        pointer.move_to(15.0, 5.0);
+
+        assert!(pointer.release(Button::Left));
+        assert_eq!(released.get(), Some(Button::Left));
+        assert!(!clicked.get());
+    }
+
+    #[test]
+    fn click_still_runs_when_released_over_pressed_target() {
+        let clicked = Rc::new(Cell::new(false));
+        let click_state = Rc::clone(&clicked);
+        let target = Target::new(
+            Area::new(0.0, 0.0, 10.0, 10.0),
+            Handlers {
+                click: Some(Rc::new(move |_| click_state.set(true))),
+                ..Default::default()
+            },
+        );
+
+        let mut pointer = Pointer::default();
+        pointer.set_targets(vec![target]);
+        pointer.move_to(5.0, 5.0);
+        pointer.press(Button::Left);
+
+        assert!(pointer.release(Button::Left));
+        assert!(clicked.get());
     }
 }

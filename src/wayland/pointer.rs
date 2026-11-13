@@ -71,14 +71,17 @@ impl WaylandState {
             }
 
             PointerEventKind::Press { button, .. } => {
-                pointer.press();
+                let Some(button) = to_button(*button) else {
+                    return false;
+                };
+                let handled = pointer.press(button);
 
                 // only the left button drags
-                if to_button(*button) != Some(Button::Left) {
-                    return false;
+                if button == Button::Left {
+                    pointer.start_drag() || handled
+                } else {
+                    handled
                 }
-
-                pointer.start_drag()
             }
 
             PointerEventKind::Release { button, .. } => {

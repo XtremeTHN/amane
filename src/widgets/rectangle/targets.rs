@@ -8,8 +8,22 @@ use crate::{Button, Point, Rectangle, Scroll};
 use super::{child, transform};
 
 impl Rectangle {
+    // runs as soon as a pointer button is pressed on this rectangle
+    pub fn on_press(mut self, handler: impl Fn(Button) + 'static) -> Self {
+        self.handlers.press = Some(Rc::new(handler));
+
+        self
+    }
+
     pub fn on_click(mut self, handler: impl Fn(Button) + 'static) -> Self {
         self.handlers.click = Some(Rc::new(handler));
+
+        self
+    }
+
+    // runs when a press on this rectangle is released, even after the pointer moves away
+    pub fn on_release(mut self, handler: impl Fn(Button) + 'static) -> Self {
+        self.handlers.release = Some(Rc::new(handler));
 
         self
     }

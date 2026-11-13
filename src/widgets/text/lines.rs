@@ -129,8 +129,16 @@ fn elide(line: &str, font: FontRef<'static>, size: f32, width: f32) -> String {
 
 // where the letters' ink starts and ends, counted from the pen's starting point
 pub fn ink(content: &str, font: FontRef<'static>, size: f32) -> (f32, f32) {
+    let (left, right, _, _) = ink_bounds(content, font, size);
+
+    (left, right)
+}
+
+pub fn ink_bounds(content: &str, font: FontRef<'static>, size: f32) -> (f32, f32, f32, f32) {
     let mut left = f32::MAX;
     let mut right = f32::MIN;
+    let mut top = f32::MAX;
+    let mut bottom = f32::MIN;
 
     let glyphs = font::shape(content, font, size);
 
@@ -141,15 +149,24 @@ pub fn ink(content: &str, font: FontRef<'static>, size: f32) -> (f32, f32) {
 
             left = left.min(glyph.x + bounds.min.x * units);
             right = right.max(glyph.x + bounds.max.x * units);
+            top = top.min(-glyph.y - bounds.max.y * units);
+            bottom = bottom.max(-glyph.y - bounds.min.y * units);
         }
     }
 
     // nothing but spaces is as wide as its advance
     if left > right {
-        return (0.0, measure(content, font, size));
+        let metrics = font.metrics(font::coords(font)).scale(size);
+
+        return (
+            0.0,
+            measure(content, font, size),
+            -metrics.ascent,
+            metrics.descent,
+        );
     }
 
-    (left, right)
+    (left, right, top, bottom)
 }
 
 // the box around a letter's outline, in the font's own units; none for a space
