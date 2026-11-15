@@ -36,20 +36,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "amane-cli"
-version = "0.1.2"
-dependencies = [
- "amane",
-]
-
-[[package]]
-name = "amane-example"
-version = "0.1.0"
-dependencies = [
- "amane",
-]
-
-[[package]]
 name = "android_system_properties"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

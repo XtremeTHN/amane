@@ -28,7 +28,15 @@ impl OpenWindow {
 
         let name = content.name();
 
-        self.update_surface(&content);
+        let became_visible = self.update_surface(&content);
+
+        if became_visible {
+            return;
+        }
+
+        if !self.visible() {
+            return;
+        }
 
         // 0 until the compositor configures the window, and again while it is hidden
         if self.width == 0 || self.height == 0 {
@@ -116,6 +124,12 @@ impl OpenWindow {
 
     pub fn request_frame(&mut self) {
         self.redraw_requested = true;
+
+        if !self.visible() {
+            self.redraw();
+
+            return;
+        }
 
         /*
          * a hidden or unconfigured window gets no frame callbacks,

@@ -14,10 +14,10 @@ use super::{
 
 impl OpenWindow {
     // settings changed by input or services reach the compositor before anything is drawn
-    pub fn update_surface(&mut self, content: &Content) {
+    pub fn update_surface(&mut self, content: &Content) -> bool {
         // a normal window's title and size are only read when it opens
         let Content::Layer(window) = content else {
-            return;
+            return false;
         };
 
         self.update_input_region(window);
@@ -28,13 +28,13 @@ impl OpenWindow {
             settings: current,
         } = &mut self.role
         else {
-            return;
+            return false;
         };
 
         let settings = Settings::from(window);
 
         if settings == *current {
-            return;
+            return false;
         }
 
         let was_visible = current.visible;
@@ -47,7 +47,7 @@ impl OpenWindow {
                 self.hide();
             }
 
-            return;
+            return false;
         }
 
         /*
@@ -57,6 +57,18 @@ impl OpenWindow {
         layer::apply(layer_surface, &settings, self.scale_factor);
 
         self.role.commit();
+
+        if !was_visible {
+            if self.width == 0 || self.height == 0 {
+                self.redraw_requested = true;
+            } else {
+                self.request_frame();
+            }
+
+            return true;
+        }
+
+        false
     }
 
     // only a changed region is sent, it takes effect with the next commit like the rest
@@ -94,10 +106,6 @@ impl OpenWindow {
         self.role.wl_surface().attach(None, 0, 0);
 
         self.role.commit();
-
-        // nothing is drawn until showing the window brings a new configure
-        self.width = 0;
-        self.height = 0;
 
         // a frame callback asked for before hiding may never come
         self.frame_requested = false;

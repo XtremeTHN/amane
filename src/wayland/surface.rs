@@ -110,6 +110,13 @@ pub enum Content {
 }
 
 impl OpenWindow {
+    pub fn visible(&self) -> bool {
+        match &self.role {
+            Role::Layer { settings, .. } => settings.visible,
+            Role::Lock(_) | Role::Normal { .. } => true,
+        }
+    }
+
     // a size of 0 leaves the choice to the window, which then keeps the size it asked for
     pub fn resize(&mut self, width: u32, height: u32) {
         let (asked_width, asked_height) = self.asked_size();

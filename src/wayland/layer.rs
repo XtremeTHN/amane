@@ -97,10 +97,11 @@ pub fn create(
 
     apply(&layer_surface, settings, scale_factor);
 
-    // a window that starts hidden makes this first commit once it is shown
-    if settings.visible {
-        layer_surface.commit();
+    if !settings.visible {
+        layer_surface.wl_surface().attach(None, 0, 0);
     }
+
+    layer_surface.commit();
 
     layer_surface
 }
