@@ -148,10 +148,13 @@ impl Rectangle {
         self
     }
 
-    pub fn child(mut self, child: impl Widget + 'static) -> Self {
-        self.child = Some(Box::new(child));
-
+    pub fn boxed_child(mut self, child: Box<dyn Widget + 'static>) -> Self {
+        self.child = Some(child);
         self
+    }
+
+    pub fn child(self, child: impl Widget + 'static) -> Self {
+        self.boxed_child(Box::new(child))
     }
 
     // space between the edges and the child, one number for every side or a Padding for each

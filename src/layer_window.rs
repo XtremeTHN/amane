@@ -193,10 +193,13 @@ impl LayerWindow {
         self
     }
 
-    pub fn child(mut self, child: impl Widget + 'static) -> Self {
-        self.root = Some(Box::new(child));
-
+    pub fn boxed_child(mut self, child: Box<dyn Widget + 'static>) -> Self {
+        self.root = Some(child);
         self
+    }
+
+    pub fn child(self, child: impl Widget + 'static) -> Self {
+        self.boxed_child(Box::new(child))
     }
 }
 
