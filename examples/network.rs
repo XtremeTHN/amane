@@ -81,7 +81,7 @@ fn list() -> LayerWindow {
             lock
         );
 
-        let ssid = String::from(access_point.ssid());
+        let ssid = format!("{} {}", access_point.ssid(), network.last_scan());
 
         rows.push(Box::new(
             Rectangle::new()

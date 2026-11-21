@@ -96,6 +96,12 @@ fn add(access_points: &mut Vec<AccessPoint>, access_point: AccessPoint) {
     same.active |= access_point.active;
 }
 
+pub fn last_scan(device: &str) -> f64 {
+    Bus::system()
+        .property(NAME, device, WIRELESS, "LastScan")
+        .number()
+}
+
 // the results show up in access_points a few seconds later
 pub fn scan(device: &str) {
     let options = Argument::Map(BTreeMap::new());

@@ -24,6 +24,8 @@ pub struct Network {
 
     wifi_enabled: bool,
 
+    last_scan: f64,
+
     // joining a wifi network that isn't up yet
     connecting: bool,
 
@@ -79,6 +81,10 @@ impl Network {
 
     pub fn wifi_enabled(&self) -> bool {
         self.wifi_enabled
+    }
+
+    pub fn last_scan(&self) -> f64 {
+        self.last_scan
     }
 
     pub fn connecting(&self) -> bool {
@@ -170,6 +176,7 @@ fn fetch() -> Network {
     if let Some(device) = wifi::device() {
         network.access_points = wifi::access_points(&device);
         network.connecting = wifi::connecting(&device);
+        network.last_scan = wifi::last_scan(&device);
     }
 
     if !manager::connected() {
